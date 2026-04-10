@@ -278,6 +278,7 @@
 
   function startAmbient() {
     const audio = document.getElementById('bg-audio');
+    if (!audio) return;
     audio.volume = 0;
     audio.play().catch(() => {});
     let v = 0;
@@ -292,6 +293,7 @@
 
   function fadeOutAmbient() {
     const audio = document.getElementById('bg-audio');
+    if (!audio) return;
     const iv = setInterval(() => {
       audio.volume = Math.max(0, audio.volume - 0.01);
       if (audio.volume <= 0) { clearInterval(iv); audio.pause(); }
