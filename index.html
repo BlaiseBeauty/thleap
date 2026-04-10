@@ -174,7 +174,7 @@
     font-size: clamp(11px, 1.4vw, 14px);
     font-weight: 300;
     letter-spacing: 0.5em;
-    color: #2e2c2a;
+    color: #7a756f;
     opacity: 0;
     animation: fadeUp 2.5s ease 2.2s forwards;
     font-style: normal;
@@ -237,54 +237,124 @@
 <script>
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  // Ambient drone via Web Audio API
+  // Ambient music via Web Audio API
   let audioCtx = null;
 
   function startAmbient() {
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const t = audioCtx.currentTime;
+
+      // Master output with slow fade-in
       const master = audioCtx.createGain();
-      master.gain.setValueAtTime(0, audioCtx.currentTime);
-      master.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + 8);
+      master.gain.setValueAtTime(0, t);
+      master.gain.linearRampToValueAtTime(0.55, t + 6);
       master.connect(audioCtx.destination);
 
-      const freqs = [55, 82.4, 110, 146.8, 164.8];
-      freqs.forEach((freq, i) => {
+      // Reverb: two long delay lines (simulated hall reverb)
+      function makeReverb(ctx, out) {
+        const times = [1.7, 2.9, 4.1];
+        const feedbacks = [0.28, 0.22, 0.16];
+        times.forEach((dt, i) => {
+          const d = ctx.createDelay(5);
+          const g = ctx.createGain();
+          const f = ctx.createBiquadFilter();
+          d.delayTime.value = dt;
+          g.gain.value = feedbacks[i];
+          f.type = 'lowpass';
+          f.frequency.value = 1800;
+          out.connect(d);
+          d.connect(f);
+          f.connect(g);
+          g.connect(d);
+          g.connect(out);
+        });
+      }
+
+      // Pad layer — soft filtered sawtooth chords (audible on any speaker)
+      // A minor feel: A3(220) E4(329.6) A4(440) C5(523.3) E5(659.3)
+      const padFreqs = [220, 329.6, 440, 523.3, 659.3];
+      const padBus = audioCtx.createGain();
+      padBus.gain.value = 0.18;
+      padBus.connect(master);
+      makeReverb(audioCtx, padBus);
+
+      padFreqs.forEach((freq, i) => {
         const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        const filter = audioCtx.createBiquadFilter();
+        const g   = audioCtx.createGain();
+        const lp  = audioCtx.createBiquadFilter();
 
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        osc.type = 'sawtooth';
+        // Slight detune for warmth
+        osc.frequency.value = freq * (1 + (i % 2 === 0 ? 0.002 : -0.002));
 
-        // Very slow micro-drift for organic feel
-        const drift = audioCtx.createOscillator();
-        const driftGain = audioCtx.createGain();
-        drift.frequency.value = 0.03 + i * 0.01;
-        driftGain.gain.value = freq * 0.002;
-        drift.connect(driftGain);
-        driftGain.connect(osc.frequency);
-        drift.start();
+        lp.type = 'lowpass';
+        lp.frequency.value = 900;
+        lp.Q.value = 0.8;
 
-        filter.type = 'lowpass';
-        filter.frequency.value = 400;
+        // Slow tremolo
+        const lfo = audioCtx.createOscillator();
+        const lfoG = audioCtx.createGain();
+        lfo.frequency.value = 0.08 + i * 0.015;
+        lfoG.gain.value = 0.04;
+        lfo.connect(lfoG);
+        lfoG.connect(g.gain);
+        lfo.start();
 
-        gain.gain.value = 0.18 - i * 0.02;
-
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(master);
+        g.gain.value = 0.22 - i * 0.025;
+        osc.connect(lp);
+        lp.connect(g);
+        g.connect(padBus);
         osc.start();
       });
 
-      // Subtle reverb-like effect with delay
-      const delay = audioCtx.createDelay(4);
-      const delayGain = audioCtx.createGain();
-      delay.delayTime.value = 2.4;
-      delayGain.gain.value = 0.15;
-      master.connect(delay);
-      delay.connect(delayGain);
-      delayGain.connect(master);
+      // Drone layer — deep sine tones (body & warmth)
+      const droneFreqs = [110, 165, 220];
+      const droneBus = audioCtx.createGain();
+      droneBus.gain.value = 0.35;
+      droneBus.connect(master);
+
+      droneFreqs.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const g   = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+
+        // Micro-drift
+        const drift = audioCtx.createOscillator();
+        const dg    = audioCtx.createGain();
+        drift.frequency.value = 0.04 + i * 0.02;
+        dg.gain.value = freq * 0.003;
+        drift.connect(dg);
+        dg.connect(osc.frequency);
+        drift.start();
+
+        g.gain.value = 0.3 - i * 0.07;
+        osc.connect(g);
+        g.connect(droneBus);
+        osc.start();
+      });
+
+      // Shimmer layer — very high gentle harmonics (air)
+      const shimmerFreqs = [1320, 1760, 2200];
+      const shimBus = audioCtx.createGain();
+      shimBus.gain.value = 0.06;
+      shimBus.connect(master);
+
+      shimmerFreqs.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const g   = audioCtx.createGain();
+        const lp  = audioCtx.createBiquadFilter();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        lp.type = 'lowpass';
+        lp.frequency.value = 3000;
+        g.gain.value = 0.04 - i * 0.01;
+        osc.connect(lp);
+        lp.connect(g);
+        g.connect(shimBus);
+        osc.start();
+      });
 
     } catch(e) {}
   }
