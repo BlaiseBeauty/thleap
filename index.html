@@ -243,66 +243,29 @@
   function startAmbient() {
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Must resume synchronously within user gesture (iOS requirement)
       audioCtx.resume();
-      const t = audioCtx.currentTime;
 
-      // Master — fade in over 5s
       const master = audioCtx.createGain();
-      master.gain.setValueAtTime(0, t);
-      master.gain.linearRampToValueAtTime(0.45, t + 5);
+      // Start from near-zero so exponential ramp works
+      master.gain.setValueAtTime(0.001, audioCtx.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 5);
       master.connect(audioCtx.destination);
 
-      // Simple delay reverb (no feedback into source)
-      const delay1 = audioCtx.createDelay(4);
-      const delay2 = audioCtx.createDelay(4);
-      const dg1 = audioCtx.createGain();
-      const dg2 = audioCtx.createGain();
-      delay1.delayTime.value = 1.6;
-      delay2.delayTime.value = 2.8;
-      dg1.gain.value = 0.25;
-      dg2.gain.value = 0.18;
-      delay1.connect(dg1); dg1.connect(master);
-      delay2.connect(dg2); dg2.connect(master);
-
-      // A minor chord: A3 C4 E4 A4 E5
-      // Triangle waves — warm, harmonic-rich, audible on laptop speakers
-      const notes = [220, 261.6, 329.6, 440, 659.3];
-      const vols  = [0.28, 0.22, 0.22, 0.18, 0.12];
+      // A minor chord — triangle waves are rich and audible on any speaker
+      // A3=220 E4=330 A4=440 C5=523
+      const notes = [220, 330, 440, 523];
+      const vols  = [0.35, 0.28, 0.28, 0.22];
 
       notes.forEach((freq, i) => {
-        // Two slightly detuned oscillators per note (chorus effect)
-        [-1.5, 1.5].forEach(cents => {
-          const osc = audioCtx.createOscillator();
-          const g   = audioCtx.createGain();
-          const lp  = audioCtx.createBiquadFilter();
-
-          osc.type = 'triangle';
-          osc.frequency.value = freq * Math.pow(2, cents / 1200);
-
-          lp.type = 'lowpass';
-          lp.frequency.value = 1400;
-
-          g.gain.value = vols[i] * 0.5;
-
-          osc.connect(lp);
-          lp.connect(g);
-          g.connect(master);
-          g.connect(delay1);
-          g.connect(delay2);
-          osc.start(t);
-        });
-      });
-
-      // Warm sine drone underneath (110 Hz + 220 Hz)
-      [110, 220].forEach((freq, i) => {
         const osc = audioCtx.createOscillator();
         const g   = audioCtx.createGain();
-        osc.type = 'sine';
+        osc.type = 'triangle';
         osc.frequency.value = freq;
-        g.gain.value = i === 0 ? 0.3 : 0.15;
+        g.gain.value = vols[i];
         osc.connect(g);
         g.connect(master);
-        osc.start(t);
+        osc.start();
       });
 
     } catch(e) { console.error('Audio error:', e); }
