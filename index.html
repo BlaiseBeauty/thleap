@@ -190,6 +190,8 @@
 </head>
 <body>
 
+<audio id="bg-audio" src="/ambient.mp3" loop preload="auto"></audio>
+
 <div id="begin" onclick="startExperience()">
   <div class="begin-th">th</div>
   <div class="begin-hint">touch to enter</div>
@@ -237,38 +239,19 @@
 <script>
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  // Ambient music via Web Audio API
-  let audioCtx = null;
-
   function startAmbient() {
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      // Must resume synchronously within user gesture (iOS requirement)
-      audioCtx.resume();
-
-      const master = audioCtx.createGain();
-      // Start from near-zero so exponential ramp works
-      master.gain.setValueAtTime(0.001, audioCtx.currentTime);
-      master.gain.exponentialRampToValueAtTime(0.6, audioCtx.currentTime + 5);
-      master.connect(audioCtx.destination);
-
-      // A minor chord — triangle waves are rich and audible on any speaker
-      // A3=220 E4=330 A4=440 C5=523
-      const notes = [220, 330, 440, 523];
-      const vols  = [0.35, 0.28, 0.28, 0.22];
-
-      notes.forEach((freq, i) => {
-        const osc = audioCtx.createOscillator();
-        const g   = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.value = freq;
-        g.gain.value = vols[i];
-        osc.connect(g);
-        g.connect(master);
-        osc.start();
-      });
-
-    } catch(e) { console.error('Audio error:', e); }
+    const audio = document.getElementById('bg-audio');
+    audio.volume = 0;
+    audio.play().catch(() => {});
+    // Fade in over 5 seconds
+    let v = 0;
+    const target = 0.55;
+    const step = target / 100;
+    const iv = setInterval(() => {
+      v = Math.min(v + step, target);
+      audio.volume = v;
+      if (v >= target) clearInterval(iv);
+    }, 50);
   }
 
   async function showBlock(id, linePause, holdTime) {
