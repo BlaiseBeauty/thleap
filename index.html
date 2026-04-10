@@ -290,6 +290,14 @@
     }, 50);
   }
 
+  function fadeOutAmbient() {
+    const audio = document.getElementById('bg-audio');
+    const iv = setInterval(() => {
+      audio.volume = Math.max(0, audio.volume - 0.01);
+      if (audio.volume <= 0) { clearInterval(iv); audio.pause(); }
+    }, 80);
+  }
+
   async function showBlock(id, linePause, holdTime) {
     const block = document.getElementById(id);
     block.style.opacity = '1';
@@ -318,6 +326,7 @@
     await showBlock('q3', 2200, 4000);
     await sleep(2200);
     await showBlock('q4', 400, 6500);
+    fadeOutAmbient();
     await sleep(3000);
     document.getElementById('doors').classList.add('visible');
   }
